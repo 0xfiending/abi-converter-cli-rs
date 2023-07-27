@@ -139,13 +139,24 @@ pub async fn format(cli_args: clap::ArgMatches) -> Result<String, Box<dyn std::e
         ("sol", "json_mini") => { sol_json_mini_convert(input).await; },
         ("sol", "ethers") => { sol_ethers_convert(input).await; },
         ("json", "json_mini") => { json_to_mini_convert(input); },
+        ("json", "ethers") => { json_ethers_convert(input); },
+        ("json", "sol") => { println!(""); },
         ("json_mini", "json") => { mini_to_json_convert(input); }
-        ("json", "ethers") => { println!(""); },
-        ("json_mini", "ethers") => { println!(""); },
-        ("sol", "all") => { println!("sol - all"); },
-        ("json", "all") => { println!("json - all"); },
-        ("json_mini", "all") => { println!("json-mini - all"); },
-        ("ethers", "all") => { println!("ethers - all"); },
+        ("json_mini", "ethers") => { json_mini_ethers_convert(input); },
+        ("json_mini", "sol") => { println!(""); },
+        ("sol", "all") => { 
+            sol_json_convert(input).await;
+            sol_json_mini_convert(input).await;
+            sol_ethers_convert(input).await;
+        },
+        ("json", "all") => { 
+            json_to_mini_convert(input);
+            json_ethers_convert(input);
+        },
+        ("json_mini", "all") => { 
+            mini_to_json_convert(input);
+            json_mini_ethers_convert(input);
+        },
         _ => { println!("default"); },
     }
 
@@ -196,7 +207,7 @@ async fn validate_sol(file_path: &str) -> Result<String, Box<dyn std::error::Err
  * and writes to file
  * File name format: DD-MM-YY_HH:MM_abi_pretty.json
  */
-pub async fn sol_json_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn sol_json_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let abi = validate_sol(file_path).await?;
     let tmp: serde_json::Value = serde_json::from_str(&abi)?;
     let pretty_json = serde_json::to_string_pretty(&tmp)?;
@@ -218,7 +229,7 @@ pub async fn sol_json_convert(file_path: &str) -> Result<(), Box<dyn std::error:
  * and writes to file
  * File name format: DD-MM-YY_HH:MM_abi_mini.json
  */
-pub async fn sol_json_mini_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn sol_json_mini_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     match validate_sol(file_path).await {
         Ok(abi) => {
             let tmp_dir = create_tmp_directory()?;
@@ -236,7 +247,7 @@ pub async fn sol_json_mini_convert(file_path: &str) -> Result<(), Box<dyn std::e
 }
 
 // WIP - loading the abi into ethers has been difficult
-pub async fn sol_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn sol_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let abi = match validate_sol(file_path).await {
         Ok(abi) => abi,
         Err(err) => return Err(err),
@@ -255,16 +266,18 @@ pub async fn sol_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::erro
         println!("{:?}", test1.functions().count());
         println!("{:?}", test1.events().count());
         println!("{:?}", test1.errors().count());
-        // fallback - bool
-        // receive - bool
     }
 
     // delete tmp_file here after work is done
 
+
+
+
+
     Ok(())
 }
 
-pub fn json_to_mini_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn json_to_mini_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(file_path)?;
     let tmp: serde_json::Value = serde_json::from_str(&contents)?;
     let abi = serde_json::to_string(&tmp)?;
@@ -280,7 +293,7 @@ pub fn json_to_mini_convert(file_path: &str) -> Result<(), Box<dyn std::error::E
     Ok(())
 }
 
-pub fn mini_to_json_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn mini_to_json_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(file_path)?;
     let tmp: serde_json::Value = serde_json::from_str(&contents)?;
     let abi = serde_json::to_string_pretty(&tmp)?;
@@ -295,6 +308,83 @@ pub fn mini_to_json_convert(file_path: &str) -> Result<(), Box<dyn std::error::E
 
     Ok(())
 } 
+
+fn json_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> { 
+    if Path::new(&file_path).exists() {
+        let f = File::open(file_path)?;
+        let contract = Contract::load(f)?;
+
+        let contract_func = contract.functions();
+
+        let mut abi = String::from("[\n");
+
+        if contract.functions().count() > 0 {
+            contract_func.for_each(|x| {
+                abi.push_str(&["  \"", &x.signature(), "\",\n"].concat());
+            });
+        }
+
+        abi.push_str("]");  // closing bracket
+        
+        if abi.len() > 5 {
+            let tmp_dir = create_tmp_directory()?;
+            let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
+            let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_ethers.json"].concat();
+            file_write(&output_file_path, abi.clone())?;
+
+            println!("\nCommand: format\nfile: {}\noutput-type: ethers\noutput-file: {}", file_path, output_file_path);
+            println!("\n\nEthers-rs Console Output:\n{}", abi);
+        } else {
+            return Err("Contract ABI could not be read and parsed. Try a different input...".into())
+        }
+    }
+
+    Ok(())
+}
+
+fn json_mini_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> { 
+    if Path::new(&file_path).exists() {
+        let f = File::open(file_path)?;
+        let contract = Contract::load(f)?;
+
+        //println!("{:?}", contract.constructor());
+        let contract_func = contract.functions();
+        //let contract_events = contract.events();
+        //let contract_errors = contract.errors();
+
+        let mut abi = String::from("[\n");
+
+        if contract.functions().count() > 0 {
+            contract_func.for_each(|x| {
+                abi.push_str(&["  \"", &x.signature(), "\",\n"].concat());
+            });
+        }
+
+        /*
+        if contract.errors().count() > 0 {
+           contract_errors.for_each(|x| {
+               println!("{:?}", &x.signature());
+               //output.push_str(&["  \"", &x.signature(), "\",\n"].concat()); 
+           });
+        }*/
+ 
+        abi.push_str("]");  // closing bracket
+        
+        if abi.len() > 5 {
+            let tmp_dir = create_tmp_directory()?;
+            let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
+            let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_ethers.json"].concat();
+            file_write(&output_file_path, abi.clone())?;
+
+            println!("\nCommand: format\nfile: {}\noutput-type: ethers\noutput-file: {}", file_path, output_file_path);
+            println!("\n\nEthers-rs Console Output:\n{}", abi);
+        } else {
+            return Err("Contract ABI could not be read and parsed. Try a different input...".into())
+        }
+    }
+
+    Ok(())
+}
 
 // Creates a tmp directory based on the current working directory
 // Skips, if tmp directory already exists
