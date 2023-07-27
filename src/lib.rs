@@ -4,6 +4,7 @@ use ethers::{
     prelude::{abigen, Abigen},
     providers::{Http, Provider},
     types::Address,
+    abi::Contract,
 };
 
 use std::env;
@@ -137,7 +138,8 @@ pub async fn format(cli_args: clap::ArgMatches) -> Result<String, Box<dyn std::e
         ("sol", "json") => { sol_json_convert(input).await; },
         ("sol", "json_mini") => { sol_json_mini_convert(input).await; },
         ("sol", "ethers") => { sol_ethers_convert(input).await; },
-        ("json", "json_mini") => { println!(""); },
+        ("json", "json_mini") => { json_to_mini_convert(input); },
+        ("json_mini", "json") => { mini_to_json_convert(input); }
         ("json", "ethers") => { println!(""); },
         ("json_mini", "ethers") => { println!(""); },
         ("sol", "all") => { println!("sol - all"); },
@@ -247,20 +249,52 @@ pub async fn sol_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::erro
     file_write(&tmp_file_path, abi)?;
 
     if Path::new(&tmp_file_path).exists() {
-        let mut test = Abigen::new(&tmp_file_path)?;
-
-        println!("{:?}", test.source());
-        println!("{:?}", test.name());
-        println!("{:?}", test.method_aliases());
-        println!("{:?}", test.event_aliases());
-        println!("{:?}", test.error_aliases_mut());
-        println!("{:?}", test.derives());
+        let f = File::open(tmp_file_path)?;
+        let test1 = Contract::load(f)?;
+        println!("{:?}", test1.constructor());
+        println!("{:?}", test1.functions().count());
+        println!("{:?}", test1.events().count());
+        println!("{:?}", test1.errors().count());
+        // fallback - bool
+        // receive - bool
     }
 
     // delete tmp_file here after work is done
 
     Ok(())
 }
+
+pub fn json_to_mini_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string(file_path)?;
+    let tmp: serde_json::Value = serde_json::from_str(&contents)?;
+    let abi = serde_json::to_string(&tmp)?;
+
+    let tmp_dir = create_tmp_directory()?;
+    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
+    let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_mini.json"].concat();
+    file_write(&output_file_path, abi.clone())?;
+
+    println!("\nCommand: format\nfile: {}\noutput-type: JSON-minified\noutput-file: {}", file_path, output_file_path);
+    println!("\n\nJSON-minified Console Output:\n{}", abi);
+
+    Ok(())
+}
+
+pub fn mini_to_json_convert(file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let contents = fs::read_to_string(file_path)?;
+    let tmp: serde_json::Value = serde_json::from_str(&contents)?;
+    let abi = serde_json::to_string_pretty(&tmp)?;
+
+    let tmp_dir = create_tmp_directory()?;
+    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
+    let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_pretty.json"].concat();
+    file_write(&output_file_path, abi.clone())?;
+
+    println!("\nCommand: format\nfile: {}\noutput-type: JSON\noutput-file: {}", file_path, output_file_path);
+    println!("\n\nPretty JSON Console Output:\n{}", abi);
+
+    Ok(())
+} 
 
 // Creates a tmp directory based on the current working directory
 // Skips, if tmp directory already exists
@@ -277,13 +311,6 @@ fn create_tmp_directory() -> Result<String, Box<dyn std::error::Error>> {
 
     Ok(String::from(tmp_dir))
 }
-
-/*
-fn get_tmp_file_path(tmp_dir: &str) -> String {
-    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-    let tmp_file_path = [tmp_dir,"/",&timestamp,"_abi.json"].concat();
-    String::from(tmp_file_path)
-}*/
 
 // Appends contents to the file_path provided
 fn file_write(file_path: &str, contents: String) -> Result<(), Box<dyn std::error::Error>> {
