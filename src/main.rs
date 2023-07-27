@@ -7,8 +7,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(cmd) = cli_args.get_one::<String>("command") {
         match cmd.as_str() {
-            "format" => { format(cli_args).await; },
-            "fetch" => { fetch("", "").await; },
+            "format" => { format(cli_args).await?; },
+            "fetch" => { fetch(cli_args).await?; },
             _ => { usage(); },
         }
     } else {
