@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use clap::{Arg, Command};
 use reqwest::Client;
 use ethers::{
@@ -6,18 +7,20 @@ use ethers::{
     types::Address,
     abi::Contract,
 };
-
-use std::env;
-use std::fs;
-use std::path::Path;
-use std::ffi::OsStr;
-use std::process::Stdio;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-
-use tokio::process::Command as TokioCommand;
-use tokio::io::{BufReader, AsyncBufReadExt};
-use chrono::{DateTime, Utc};
+use std::{
+    env,
+    fs,
+    fs::File,
+    io::{BufWriter, Write, Read},
+    process::Stdio,
+    ffi::OsStr,
+    path::Path,
+    collections::BTreeMap,
+};
+use tokio::{
+    process::Command as TokioCommand,
+    io::{BufReader, AsyncBufReadExt},
+};
 
 pub fn usage() {
     println!("{}\n{}\n{}\n{}\n{}",
@@ -45,14 +48,18 @@ pub fn parse_cli_args() -> clap::ArgMatches {
                 .short('d')
                 .num_args(1),
             Arg::new("output_type")
-                 .long("otype")
-                 .short('t')
-                 .ignore_case(true)
-                 .num_args(1),
-            Arg::new("output_path")
-                 .long("out")
-                 .short('o')
-                 .num_args(1),
+                .long("otype")
+                .short('t')
+                .ignore_case(true)
+                .num_args(1),
+            Arg::new("config")
+                .long("conf")
+                .short('f')
+                .num_args(1),
+            Arg::new("address")
+                .long("addr")
+                .short('a')
+                .num_args(1),
         ])
         .get_matches();
 
@@ -63,16 +70,22 @@ pub fn parse_cli_args() -> clap::ArgMatches {
  * ETHERSCAN_API_KEY can be set as an environment variable
  * or can be set by a yaml configuration file in the src directory
  */
-pub async fn fetch(cli_args: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
-    
-    let token = "";
+pub async fn fetch(cli_args: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {  
+    let conf = match cli_args.get_one::<String>("config") {
+        Some(config) => config,
+        _ => return Err("fetch|[config] opt not found".into()),
+    };
+
+    // parse contract_addr from cli_args
+
+    let token = get_token(conf)?;
     let contract_addr = "";
 
     let url = [
         "https://api.etherscan.io/api?module=contract&action=getabi&address=",
         contract_addr,
         "&apikey=",
-        token
+        &token
     ].concat();
 
     let response = Client::new()
@@ -86,7 +99,7 @@ pub async fn fetch(cli_args: clap::ArgMatches) -> Result<(), Box<dyn std::error:
 
     let abi = match &tmp["result"].as_str() {
         Some(abi) => abi.to_owned(),
-        _ => return Err("Fetched ABI could not be parsed correctly".into()),
+        _ => return Err("fetch|ABI could not be parsed".into()),
     };
 
     let pretty_json = serde_json::to_string_pretty(&abi)?;
@@ -102,7 +115,8 @@ pub async fn fetch(cli_args: clap::ArgMatches) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-pub async fn format(cli_args: clap::ArgMatches) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn format(cli_args: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
+    // parse CLI args
     let input = match cli_args.get_one::<String>("input_path") {
         Some(input) => input,
         _ => return Err("format|[input_path] command opt missing|specify a raw string or file path".into()),
@@ -113,42 +127,22 @@ pub async fn format(cli_args: clap::ArgMatches) -> Result<String, Box<dyn std::e
         _ => return Err("format|[input_type] command opt missing|specify json, json_mini, ethers, or sol".into()),
     };
 
-    let output = match cli_args.get_one::<String>("output_path") {
-        Some(output) => output.to_owned(),
-        _ => String::from(env::current_dir()?.to_str().unwrap()),
-    };
-
     let output_type = match cli_args.get_one::<String>("output_type") {
         Some(output_type) => output_type,
         _ => "all",
     };
 
-    // Not sure if i'll still accept string input, seems funky
-    if !Path::new(input).exists() {
-        println!("creating new file");
-
-        // get current directory
-        // set up tmp directory
-        // write to file in tmp
-        // load abi from tmp
-        // move to type processing
-
-        // WIP - come back for this
-    }
-
-    // NOTE - TO-DO 
-    // 1 Add support for accepting ethers-rs abi's as input
-    // 2 Add support for reversing an ABI back to .sol file, seems tricky
+    // Convert, input_type -> output_type
+    // valid input_types: sol, json, json_mini
+    // valid output_types: json, json_mini, ethers, all
     match (input_type.as_str(), output_type) {
         ("sol", "json") => { sol_json_convert(input).await?; },
         ("sol", "json_mini") => { sol_json_mini_convert(input).await?; },
         ("sol", "ethers") => { sol_ethers_convert(input).await?; },
         ("json", "json_mini") => { json_to_mini_convert(input)?; },
         ("json", "ethers") => { json_ethers_convert(input)?; },
-        ("json", "sol") => { println!(""); },
         ("json_mini", "json") => { mini_to_json_convert(input)?; }
         ("json_mini", "ethers") => { json_mini_ethers_convert(input)?; },
-        ("json_mini", "sol") => { println!(""); },
         ("sol", "all") => { 
             sol_json_convert(input).await?;
             sol_json_mini_convert(input).await?;
@@ -162,10 +156,10 @@ pub async fn format(cli_args: clap::ArgMatches) -> Result<String, Box<dyn std::e
             mini_to_json_convert(input)?;
             json_mini_ethers_convert(input)?;
         },
-        _ => { println!("default"); },
+        _ => { println!("default"); },   // TODO error
     }
 
-    Ok("test".into())
+    Ok(())
 }
 
 /* Checks if file_path parameter is a file on the current system,
@@ -177,9 +171,12 @@ pub async fn format(cli_args: clap::ArgMatches) -> Result<String, Box<dyn std::e
 */
 async fn validate_sol(file_path: &str) -> Result<String, Box<dyn std::error::Error>> {
     let contents = fs::read_to_string(file_path)?;
+
+    // Checks for License ID + .sol extension
     if contents[0..26].eq("// SPDX-License-Identifier") &&
         Path::new(file_path).extension().and_then(OsStr::to_str) == Some("sol")
     {
+        // Compile the file + generate ABI
         let mut output_test = TokioCommand::new("solc")
             .args([file_path, "--abi"])
             .stdout(Stdio::piped())
@@ -190,8 +187,8 @@ async fn validate_sol(file_path: &str) -> Result<String, Box<dyn std::error::Err
             .stdout
             .take()
             .expect("validate_sol|failed to parse compilation output");
-        let mut reader = BufReader::new(output_contents).lines();
 
+        let mut reader = BufReader::new(output_contents).lines();
         // remove extra lines from output to get raw ABI
         reader.next_line().await?;
         reader.next_line().await?;
@@ -199,11 +196,11 @@ async fn validate_sol(file_path: &str) -> Result<String, Box<dyn std::error::Err
 
         match reader.next_line().await? {
             Some(abi) => return Ok(abi),
-            _ => return Err("validate_sol|abi can't be parsed from generated output".into()),
+            _ => return Err("validate_sol|ABI can't be parsed from generated output".into()),
         };
     }
 
-    return Err("validate_sol|the provided input has been deemed not a solidity file".into())
+    return Err("validate_sol|the provided path is not a solidity file".into())
 }
 
 /* Creates an ABI from .sol file
@@ -276,6 +273,10 @@ async fn sol_ethers_convert(file_path: &str) -> Result<(), Box<dyn std::error::E
                 abi.push_str(&["  \"", &x.signature(), "\",\n"].concat());
             });
         }
+
+        // TODO
+        // events 
+        // errors
 
         abi.push_str("]");  // closing bracket
         
@@ -430,4 +431,43 @@ fn file_write(file_path: &str, contents: String) -> Result<(), Box<dyn std::erro
     fd.flush()?;
 
     Ok(())
+}
+
+fn get_token(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+   let token: String;
+    
+    match path.is_empty() {
+        true => {
+            // look for ETHERSCAN_API_KEY in .env
+            token = match env::var("ETHERSCAN_API_KEY") {
+                Ok(t) => t,
+                Err(_) => return Err("get_token|ETHERSCAN_API_KEY not found".into()),
+            };
+        },
+        false => {
+            // look for .yaml config
+            let mut yaml_config = File::open(
+                String::from(path.to_owned())
+            )
+            .expect(&format!("get_token|{} cannot be opened", path));
+
+            let mut file_data = String::new();
+            yaml_config
+                .read_to_string(&mut file_data)
+                .expect(&format!("get_token|yaml_config cannot be read"));
+
+            let conf: BTreeMap<String, String> = 
+                serde_yaml::from_str(&file_data)
+                .expect("get_token|serde_yaml parse failed. conf creation aborted...".into());
+
+            token = conf.get("etherscan_key")
+                .expect("get_token|etherscan_key not found")
+                .clone();
+        },
+    }
+
+    match token.is_empty() {
+        true => return Err("get_token|etherscan_key is empty".into()),
+        false => return Ok(token),
+    } 
 }
