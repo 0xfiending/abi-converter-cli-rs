@@ -38,6 +38,7 @@ For convert, the relevant options are input_path, input_type, output_type. All o
 - json => pretty JSON
 - json-mini => JSON-minified
 - ethers => ethers-rs
+- all => converts to all available formats, i.e. if sol -> all, the output will be json, json-mini, and ethers.
 
 convert recommended usage: $ abi_converter_cli -- --cmd convert --in tmp.json --itype json --otype ethers 
 
