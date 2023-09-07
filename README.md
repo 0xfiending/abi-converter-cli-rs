@@ -31,13 +31,15 @@ fetch recommended usage: $ abi_converter_cli -- --cmd fetch --addr 0xcA11bde0597
 For convert, the relevant options are input_path, input_type, output_type. All of these options are required.
 
 ### Valid Input Types
-- .sol
-- .json
+- sol => .sol
+- json => .json
 
 ### Valid Output Types
-- pretty JSON
-- JSON-minified
-- ethers-rs
+- json => pretty JSON
+- json-mini => JSON-minified
+- ethers => ethers-rs
+
+convert recommended usage: $ abi_converter_cli -- --cmd convert --in tmp.json --itype json --otype ethers 
 
 ```bash
   Usage: abi_converter_cli [OPTIONS] --cmd <command>
