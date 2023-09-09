@@ -34,11 +34,11 @@ For format, the relevant options are input_path, input_type, output_type. All of
 
 Valid Input Types
 - sol => .sol
-- json => .json
+- json/json_mini => .json
 
 Valid Output Types
 - json => pretty JSON
-- json-mini => JSON-minified
+- json_mini => JSON-minified
 - ethers => ethers-rs
 - all => converts to all available formats, i.e. if sol -> all, the output will be json, json-mini, and ethers.
 
