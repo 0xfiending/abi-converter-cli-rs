@@ -16,7 +16,7 @@ Inspired by: https://twitter.com/msolomon44
 
 The usage of the utility is dependent on the 'command' input.
 
-There are two commands, fetch and convert.
+There are two commands, fetch and format.
 
 For fetch, config and address are the relevant options.
 
@@ -28,7 +28,7 @@ The --config option is not necessary if an .env is used instead.
 
 fetch recommended usage: $ abi_converter_cli -- --cmd fetch --addr 0xcA11bde05977b3631167028862bE2a173976CA11
 
-For convert, the relevant options are input_path, input_type, output_type. All of these options are required.
+For format, the relevant options are input_path, input_type, output_type. All of these options are required.
 
 ### Valid Input Types
 - sol => .sol
@@ -38,8 +38,9 @@ For convert, the relevant options are input_path, input_type, output_type. All o
 - json => pretty JSON
 - json-mini => JSON-minified
 - ethers => ethers-rs
+- all => converts to all available formats, i.e. if sol -> all, the output will be json, json-mini, and ethers.
 
-convert recommended usage: $ abi_converter_cli -- --cmd convert --in tmp.json --itype json --otype ethers 
+format recommended usage: $ abi_converter_cli -- --cmd format --in tmp.json --itype json --otype ethers 
 
 ```bash
   Usage: abi_converter_cli [OPTIONS] --cmd <command>
