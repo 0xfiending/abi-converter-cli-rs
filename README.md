@@ -32,11 +32,11 @@ fetch recommended usage: `$ ./abi_converter_cli -- --cmd fetch --addr 0xcA11bde0
 ### format
 For format, the relevant options are input_path, input_type, output_type. All of these options are required.
 
-### Valid Input Types
+Valid Input Types
 - sol => .sol
 - json => .json
 
-### Valid Output Types
+Valid Output Types
 - json => pretty JSON
 - json-mini => JSON-minified
 - ethers => ethers-rs
