@@ -1,7 +1,5 @@
 # abi-converter-cli-rs
 
-A simple CLI utility that converts a contract's ABI to different formats, written in pure rust.
-
 Inspired by: https://twitter.com/msolomon44
 
 ## Features
