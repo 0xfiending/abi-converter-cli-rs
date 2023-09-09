@@ -15,4 +15,4 @@ tokio = { version = "1.32.0", features = ["full"] }
 
 [lib]
 name = "utils"
-path = "src/lib.rs"
+path = "src/lib/lib.rs"
