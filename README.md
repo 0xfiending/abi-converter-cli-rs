@@ -26,7 +26,7 @@ The --config option is used to supply a .yaml config with `etherscan_api_key` se
 
 The --config option is not necessary if an .env is used instead.
 
-fetch recommended usage: `$ abi_converter_cli -- --cmd fetch --addr 0xcA11bde05977b3631167028862bE2a173976CA11`
+fetch recommended usage: `$ ./abi_converter_cli -- --cmd fetch --addr 0xcA11bde05977b3631167028862bE2a173976CA11`
 
 For format, the relevant options are input_path, input_type, output_type. All of these options are required.
 
@@ -40,7 +40,7 @@ For format, the relevant options are input_path, input_type, output_type. All of
 - ethers => ethers-rs
 - all => converts to all available formats, i.e. if sol -> all, the output will be json, json-mini, and ethers.
 
-format recommended usage: `$ abi_converter_cli -- --cmd format --in tmp.json --itype json --otype ethers` 
+format recommended usage: `$ ./abi_converter_cli -- --cmd format --in tmp.json --itype json --otype ethers` 
 
 ```bash
   Usage: abi_converter_cli [OPTIONS] --cmd <command>
