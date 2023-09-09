@@ -18,6 +18,7 @@ The usage of the utility is dependent on the 'command' input.
 
 There are two commands, fetch and format.
 
+### fetch
 For fetch, config and address are the relevant options.
 
 The --address option is used to supply a contract address to fetch from Etherscan. This option is required.
@@ -28,6 +29,7 @@ The --config option is not necessary if an .env is used instead.
 
 fetch recommended usage: `$ ./abi_converter_cli -- --cmd fetch --addr 0xcA11bde05977b3631167028862bE2a173976CA11`
 
+### format
 For format, the relevant options are input_path, input_type, output_type. All of these options are required.
 
 ### Valid Input Types
