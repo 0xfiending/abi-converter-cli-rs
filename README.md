@@ -4,7 +4,7 @@ Inspired by: https://twitter.com/msolomon44
 
 ## Features
 
-- Read in a contract's ABI in .sol or .json formats.
+- Read in a solidity file or a contract's ABI in .json.
   - Supported outputs -> json, json-mini, ethers
   - The converted ABI is written to a directory and to console.
 - Fetch a contract's ABI from Etherscan.
