@@ -55,10 +55,14 @@ format recommended usage: `$ ./abi_converter_cli -- --cmd format --in tmp.json -
     -h, --help                 Print help
 ```
 
+### Suggested Usage
+- Quickly convert the ABI of contract(s) you are developing for readability and/or portability.
+- Quickly cache ABI(s) of contracts/interfaces you are interacting with.
+   - Convert again if necessary. 
 
 ## Demo
 
-Insert gif or link to demo
+Check the `work` directory for examples.
 
 
 ## License
