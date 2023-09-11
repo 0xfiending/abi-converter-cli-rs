@@ -1,12 +1,7 @@
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use clap::{Arg, Command};
 use reqwest::Client;
-use ethers::{
-    prelude::{abigen, Abigen},
-    providers::{Http, Provider},
-    types::Address,
-    abi::Contract,
-};
+use ethers::abi::Contract;
 use std::{
     env,
     fs,
@@ -21,7 +16,6 @@ use tokio::{
     process::Command as TokioCommand,
     io::{BufReader, AsyncBufReadExt},
 };
-use serde_json::json;
 
 pub fn usage() {
     println!("{}\n{}\n{}\n{}\n{}\n{}\n{}\n{}",
@@ -113,26 +107,19 @@ pub async fn fetch(cli_args: clap::ArgMatches) -> Result<(), Box<dyn std::error:
 
     let tmp: serde_json::Value = serde_json::from_str(&response)?;
     
-    // remove unwrap() later
-    let abi_format: serde_json::Value = serde_json::from_str(&tmp["result"].as_str().unwrap())?;
-    let json = serde_json::to_string(&abi_format)?;
+    let abi_format: serde_json::Value = match &tmp["result"].as_str() {
+        Some(abi) => serde_json::from_str(abi)?,
+        None => return Err("".into()),
+    };
+    let json = serde_json::to_string_pretty(&abi_format)?;
 
-    let output_file_path: String;
-    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-    match output_path.is_empty() {
-        true => {
-            let tmp_dir = create_tmp_directory()?;
-            output_file_path = [&tmp_dir,"/",&timestamp,"_",contract_addr,".json"].concat();
-        },
-        false => { 
-            output_file_path = [&output_path,"/",&timestamp,"_",contract_addr,".json"].concat();
-        },
-    }
+    let file_name = [contract_addr, ".json"].concat();
+    let output_file_path: String = format_output_path(output_path, &file_name)?;
     file_write(&output_file_path, json.clone())?;
 
     println!("{:-<1$}", "", 75);
     println!("Command: fetch\ncontract-address: {}\noutput-type: JSON\noutput-file: {}", contract_addr, output_file_path);
-    println!("\n\nJSON Console Output:\n{}", json);
+    println!("\n\nPretty JSON Console Output:\n{}", json);
 
     Ok(())
 }
@@ -240,16 +227,11 @@ async fn sol_json_convert(input_path: &str, output_path: &str) -> Result<(), Box
     let abi = validate_sol(input_path).await?;
     let tmp: serde_json::Value = serde_json::from_str(&abi)?;
     let pretty_json = serde_json::to_string_pretty(&tmp)?;
-
-    let tmp_dir = create_tmp_directory()?;
-    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-    let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_pretty.json"].concat();
+    
+    let output_file_path = format_output_path(output_path, "abi_pretty.json")?;
     file_write(&output_file_path, pretty_json.clone())?;
 
-    println!("{:-<1$}", "", 75);
-    println!("Command: format\nfile: {}\noutput-type: JSON\noutput-file: {}", input_path, output_file_path);
-    println!("\n\nPretty JSON Console Output:\n{}", pretty_json);
-
+    print_abi("Pretty JSON", input_path, &output_file_path, &pretty_json);
     Ok(())
 }
 
@@ -261,15 +243,10 @@ async fn sol_json_convert(input_path: &str, output_path: &str) -> Result<(), Box
 async fn sol_json_mini_convert(input_path: &str, output_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     match validate_sol(input_path).await {
         Ok(abi) => {
-            let tmp_dir = create_tmp_directory()?;
-            let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-            let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_mini.json"].concat();
+            let output_file_path = format_output_path(output_path, "abi_mini.json")?;
             file_write(&output_file_path, abi.clone())?;
 
-
-            println!("{:-<1$}", "", 75);
-            println!("Command: format\nfile: {}\noutput-type: JSON-minified\noutput-file: {}", input_path, output_file_path);
-            println!("\n\nJSON-minified Console Output:\n{}", abi);
+            print_abi("JSON-minified", input_path, &output_file_path, &abi);
         },
         Err(err) => return Err(err),
     };
@@ -284,7 +261,6 @@ async fn sol_ethers_convert(input_path: &str, output_path: &str) -> Result<(), B
     };
 
     let tmp_dir = create_tmp_directory()?;
-
     let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
     let tmp_file_path = [&tmp_dir,"/",&timestamp,"_abi.json"].concat();
     file_write(&tmp_file_path, abi)?;
@@ -306,24 +282,10 @@ async fn sol_ethers_convert(input_path: &str, output_path: &str) -> Result<(), B
         abi.push_str("]");  // closing bracket
         
         if abi.len() > 5 {
-            let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-            let output_file_path: String;
-
-            match output_path.is_empty() {
-                true => {
-                    let tmp_dir = create_tmp_directory()?;
-                    output_file_path = [&tmp_dir,"/",&timestamp,"_abi_ethers.json"].concat();
-                },
-                false => { 
-                    output_file_path = [&output_path,"/",&timestamp,"_abi_ethers.json"].concat();
-                },
-            }
-
+            let output_file_path: String = format_output_path(output_path, "abi_ethers.json")?;
             file_write(&output_file_path, abi.clone())?;
 
-            println!("{:-<1$}", "", 75);
-            println!("Command: format\nfile: {}\noutput-type: ethers\noutput-file: {}", input_path, output_file_path);
-            println!("\n\nEthers-rs Console Output:\n{}", abi);
+            print_abi("Ethers-rs", input_path, &output_file_path, &abi);
         } else {
             return Err("Contract ABI could not be read and parsed. Try a different input...".into())
         }
@@ -339,16 +301,10 @@ fn json_to_mini_convert(input_path: &str, output_path: &str) -> Result<(), Box<d
     let tmp: serde_json::Value = serde_json::from_str(&contents)?;
     let abi = serde_json::to_string(&tmp)?;
 
-
-    let tmp_dir = create_tmp_directory()?;
-    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-    let output_file_path = [&tmp_dir,"/",&timestamp,"_abi_mini.json"].concat();
+    let output_file_path: String = format_output_path(output_path, "abi_mini.json")?;
     file_write(&output_file_path, abi.clone())?;
 
-    println!("{:-<1$}", "", 75);
-    println!("Command: format\nfile: {}\noutput-type: JSON-minified\noutput-file: {}", input_path, output_file_path);
-    println!("\n\nJSON-minified Console Output:\n{}", abi);
-
+    print_abi("JSON-minified", input_path, &output_file_path, &abi);
     Ok(())
 }
 
@@ -357,23 +313,10 @@ fn mini_to_json_convert(input_path: &str, output_path: &str) -> Result<(), Box<d
     let tmp: serde_json::Value = serde_json::from_str(&contents)?;
     let abi = serde_json::to_string_pretty(&tmp)?;
  
-    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-    let output_file_path: String;
-    match output_path.is_empty() {
-        true => {     
-            let tmp_dir = create_tmp_directory()?;
-            output_file_path = [&tmp_dir,"/",&timestamp,"_abi_pretty.json"].concat();
-        },
-        false => {
-            output_file_path = [&output_path,"/",&timestamp,"_abi_pretty.json"].concat();
-        },
-    }
+    let output_file_path: String = format_output_path(output_path, "abi_pretty.json")?;
     file_write(&output_file_path, abi.clone())?;
 
-    println!("{:-<1$}", "", 75);
-    println!("Command: format\nfile: {}\noutput-type: JSON\noutput-file: {}", input_path, output_file_path);
-    println!("\n\nPretty JSON Console Output:\n{}", abi);
-
+    print_abi("Pretty JSON", input_path, &output_file_path, &abi);
     Ok(())
 } 
 
@@ -383,7 +326,7 @@ fn json_ethers_convert(input_path: &str, output_path: &str) -> Result<(), Box<dy
         let contract = Contract::load(f)?;
 
         let contract_func = contract.functions();
-        let mut abi = String::from("[\n");
+        let mut abi = String::from("[\n");     // start
 
         if contract.functions().count() > 0 {
             contract_func.for_each(|x| {
@@ -394,23 +337,10 @@ fn json_ethers_convert(input_path: &str, output_path: &str) -> Result<(), Box<dy
         abi.push_str("]");  // closing bracket
         
         if abi.len() > 8 {
-            let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
-            let output_file_path: String;
-
-            match output_path.is_empty() {
-                true => {
-                    let tmp_dir = create_tmp_directory()?;
-                    output_file_path = [&tmp_dir,"/",&timestamp,"_abi_ethers.json"].concat();
-                },
-                false => { 
-                    output_file_path = [&output_path,"/",&timestamp,"_abi_ethers.json"].concat();
-                },
-            }
+            let output_file_path: String = format_output_path(output_path, "abi_ethers.json")?;
             file_write(&output_file_path, abi.clone())?;
 
-            println!("{:-<1$}", "", 75);
-            println!("Command: format\nfile: {}\noutput-type: ethers\noutput-file: {}", input_path, output_file_path);
-            println!("\n\nEthers-rs Console Output:\n{}", abi);
+            print_abi("Ethers-rs", input_path, &output_file_path, &abi);
         } else {
             return Err("Contract ABI could not be read and parsed. Try a different input...".into())
         }
@@ -485,4 +415,30 @@ fn get_token(path: &str) -> Result<String, Box<dyn std::error::Error>> {
         true => return Err("get_token|etherscan_key is empty".into()),
         false => return Ok(token),
     } 
+}
+
+fn format_output_path(output_path: &str, file_suffix: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let output_file_path: String;
+    let timestamp = format!("{}", Utc::now().format("%d-%m-%Y_%H:%M"));
+    match output_path.is_empty() {
+        true => {
+            let tmp_dir = create_tmp_directory()?;
+            output_file_path = [&tmp_dir,"/",&timestamp,"_",file_suffix].concat();
+        },
+        false => { 
+            output_file_path = [output_path,"/",&timestamp,"_",file_suffix].concat();
+        },
+    }
+    Ok(output_file_path)
+}
+
+fn print_abi(
+    output_type: &str,
+    input_path: &str, 
+    output_path: &str, 
+    abi: &str
+) {
+    println!("{:-<1$}", "", 75);
+    println!("Command: format\nfile: {}\noutput-type: {}\noutput-file: {}", input_path, output_type, output_path);
+    println!("\n\nConsole Output:\n{}", abi);
 }
